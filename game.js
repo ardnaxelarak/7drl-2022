@@ -11,14 +11,14 @@ const Terrain = {
 
 const Game = {
   width: 50,
-  height: 20,
+  height: 33,
   display: null,
   map: [],
   fov: null,
   player: {x: 0, y: 0},
 
   init: function() {
-    this.display = new ROT.Display({width: 80, height: 25, fontSize: 21, spacing: 1.1});
+    this.display = new ROT.Display({width: 80, height: 35, fontSize: 15, spacing: 1.1});
     document.body.appendChild(this.display.getContainer());
     document.body.addEventListener("keydown", this._keydown.bind(this));
     document.body.addEventListener("keypress", this._keypress.bind(this));
@@ -159,14 +159,17 @@ const Game = {
       }
     }
 
-    const startRoom = ROT.RNG.getItem(digger.rooms.flat());
-    this.player.x = startRoom.x + Math.floor(ROT.RNG.getUniform() * startRoom.width);
-    this.player.y = startRoom.y + Math.floor(ROT.RNG.getUniform() * startRoom.height);
-
     const stairRoom = ROT.RNG.getItem(digger.rooms.flat());
     const stairX = stairRoom.x + Math.floor(ROT.RNG.getUniform() * stairRoom.width);
     const stairY = stairRoom.y + Math.floor(ROT.RNG.getUniform() * stairRoom.height);
     this.map[stairY][stairX].terrain = Terrain.Stair;
+
+    const startRoom = ROT.RNG.getItem(digger.rooms.flat());
+    this.player.x = startRoom.x + Math.floor(ROT.RNG.getUniform() * startRoom.width);
+    this.player.y = startRoom.y + Math.floor(ROT.RNG.getUniform() * startRoom.height);
+    if (!this._getTerrain(this.player.x, this.player.y).enter) {
+      this._generateMap();
+    }
   },
 
   _setWall: function(x, y) {
