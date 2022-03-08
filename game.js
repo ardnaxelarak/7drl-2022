@@ -1,5 +1,9 @@
 var digger;
 
+function randomInt(max) {
+  return Math.floor(ROT.RNG.getUniform() * max);
+}
+
 const Terrain = {
   Rock: {value: 0, chr: ' ', light: false, enter: false},
   Wall: {value: 1, chr: '#', light: false, enter: false},
@@ -20,13 +24,31 @@ const Magic = {
   },
 };
 
+const Spells = {
+  Heal: {name: "Heal", type: Magic.Green, cost: 1, heal: 3},
+  FireBolt: {name: "Fire Bolt", type: Magic.Red, cost: 1, damage: 5},
+  FrostBolt: {name: "Frost Bolt", type: Magic.Blue, cost: 1, damage: 5},
+  AcidBolt: {name: "Acid Bolt", type: Magic.Yellow, cost: 1, damage: 5},
+};
+
+const Items = {
+  gold: function(amount) {
+    return {type: "gold", amount: amount, color: "#FE2", symbol: "$"};
+  },
+
+  card: function(type, value) {
+    return {type: "card", card: {type: type, value: value}, color: type.color, symbol: type.symbol};
+  },
+};
+
 const Game = {
   width: 50,
   height: 30,
   display: null,
   map: [],
   fov: null,
-  player: {hp: 5, hp_max: 10},
+  output: [],
+  player: {},
 
   init: function() {
     this.display = new ROT.Display({width: 80, height: 35, fontSize: 15, spacing: 1.1});
@@ -34,7 +56,15 @@ const Game = {
     document.body.addEventListener("keydown", this._keydown.bind(this));
     document.body.addEventListener("keypress", this._keypress.bind(this));
     this.fov = new ROT.FOV.PreciseShadowcasting(this._lightPasses.bind(this));
-    this._generateMap();
+    this._initGame();
+  },
+
+  _initGame: function() {
+    this.player.hp = 50;
+    this.player.hp_max = 99;
+    this.player.gold = 0;
+    this.player.spellbook = [Spells.Heal, Spells.FireBolt, Spells.FrostBolt, Spells.AcidBolt];
+    this._generateMap(1);
     this._initDeck();
     this._updateState();
   },
@@ -63,10 +93,36 @@ const Game = {
     }
   },
 
+  _getTopItem: function(x, y) {
+    if (this.map[y] && this.map[y][x] && this.map[y][x].items) {
+      return this.map[y][x].items[0];
+    } else {
+      return null;
+    }
+  },
+
   _sees: function(x, y) {
     if (this.map[y] && this.map[y][x]) {
       this.map[y][x].seen = true;
       this.map[y][x].sees = true;
+    }
+  },
+
+  _pickUp: function(x, y) {
+    if (this.map[y] && this.map[y][x] && this.map[y][x].items) {
+      while (this.map[y][x].items.length > 0) {
+        const item = this.map[y][x].items.shift();
+        switch (item.type) {
+          case "gold":
+            this.player.gold += item.amount;
+            this._write(`${item.amount} gold acquired.`);
+            break;
+          case "card":
+            this.player.discard.push(item.card);
+            this._write(`%c{${item.card.type.color}}${item.card.type.symbol.repeat(item.card.value)}%c{} card acquired.`);
+            break;
+        }
+      }
     }
   },
 
@@ -78,6 +134,7 @@ const Game = {
     if (this._getTerrain(this.player.x + xd, this.player.y + yd).enter) {
       this.player.x += xd;
       this.player.y += yd;
+      this._pickUp(this.player.x, this.player.y);
       this._updateState();
       return true;
     }
@@ -97,6 +154,49 @@ const Game = {
         break;
       case ROT.KEYS.VK_DOWN:
         this._tryMove(0, 1);
+        break;
+      case ROT.KEYS.VK_1:
+        this._castSpell(0);
+        break;
+      case ROT.KEYS.VK_2:
+        this._castSpell(1);
+        break;
+      case ROT.KEYS.VK_3:
+        this._castSpell(2);
+        break;
+      case ROT.KEYS.VK_4:
+        this._castSpell(3);
+        break;
+      case ROT.KEYS.VK_5:
+        this._castSpell(4);
+        break;
+      case ROT.KEYS.VK_6:
+        this._castSpell(5);
+        break;
+      case ROT.KEYS.VK_7:
+        this._castSpell(6);
+        break;
+      case ROT.KEYS.VK_8:
+        this._castSpell(7);
+        break;
+      case ROT.KEYS.VK_9:
+        this._castSpell(8);
+        break;
+      case ROT.KEYS.VK_0:
+        this._castSpell(9);
+        break;
+    }
+  },
+
+  _keypress: function(e) {
+    const ch = String.fromCharCode(e.charCode);
+    switch (ch) {
+      case '>':
+        if (this._getTerrain(this.player.x, this.player.y).descend) {
+          this._write(`Descending to depth ${this.player.floor + 1}.`);
+          this._generateMap(this.player.floor + 1);
+          this._updateState();
+        }
         break;
     }
   },
@@ -126,16 +226,58 @@ const Game = {
     }
   },
 
-  _keypress: function(e) {
-    const ch = String.fromCharCode(e.charCode);
-    switch (ch) {
-      case '>':
-        if (this._getTerrain(this.player.x, this.player.y).descend) {
-          this._generateMap();
-          this._updateState();
-        }
-        break;
+  _canCast: function(spell) {
+    var count = 0;
+    for (const card of this.player.hand) {
+      if (card.type == spell.type) {
+        count += card.value;
+      }
     }
+    return count >= spell.cost;
+  },
+
+  _paySpell: function(spell) {
+    var remaining = spell.cost;
+    const indices = [];
+    for (var i = 0; i < this.player.hand.length && remaining > 0; i++) {
+      const card = this.player.hand[i];
+      if (card.type == spell.type) {
+        indices.push(i);
+        remaining -= card.value;
+      }
+    }
+    indices.reverse();
+    for (const index of indices) {
+      this.player.discard.push(this.player.hand[index]);
+      this.player.hand.splice(index, 1);
+    }
+  },
+
+  _castSpell: function(index) {
+    const spell = this.player.spellbook[index];
+    if (!spell || !this._canCast(spell)) {
+      return;
+    }
+    this._paySpell(spell);
+    this._updateState();
+  },
+
+  _write: function(text) {
+    this.output.unshift(text);
+    while (this.output.length > 9) {
+      this.output.pop();
+    }
+  },
+
+  _getText: function() {
+    var text = "";
+    if (this.output.length > 0) {
+      text += "%c{white}" + this.output[0].replace(/%c{}/g, "%c{white}") + "%c{}";
+    }
+    for (var i = 1; i < this.output.length; i++) {
+      text += "\n" + this.output[i];
+    }
+    return text;
   },
 
   _updateState: function() {
@@ -155,17 +297,39 @@ const Game = {
 
     this.display.drawText(2, 32, "Player the Explorer");
     this.display.drawText(2, 33, `HP: ${this.player.hp.toString().padStart(this.player.hp_max.toString().length)} / ${this.player.hp_max}`);
+    this.display.drawText(17, 33, `$${this.player.gold}`);
+
+    for (var i = 0; i < this.display.getOptions().height; i++) {
+      for (var j = 54; j < this.display.getOptions().width; j++) {
+        this.display.draw(j, i, " ");
+      }
+    }
+    this.display.drawText(54, 1, this._getText(), 24);
+    for (var i = 10; i < this.display.getOptions().height; i++) {
+      for (var j = 54; j < this.display.getOptions().width; j++) {
+        this.display.draw(j, i, " ");
+      }
+    }
 
     this._fillHand();
-    this.display.drawText(54, 1, "Hand:");
-    this.display.drawText(54, 2, " ".repeat(15));
+    this.display.drawText(54, 11, "%c{white}Hand:");
     var x = 54;
     for (var i = 0; i < this.player.hand.length; i++) {
       for (var j = 0; j < this.player.hand[i].value; j++) {
-        this.display.draw(x, 2, this.player.hand[i].type.symbol, this.player.hand[i].type.color);
+        this.display.draw(x, 12, this.player.hand[i].type.symbol, this.player.hand[i].type.color);
         x += 1;
       }
       x += 1;
+    }
+
+    this.display.drawText(54, 14, "%c{white}Spellbook:");
+    for (var i = 0; i < this.player.spellbook.length; i++) {
+      const spell = this.player.spellbook[i];
+      var color = "#888";
+      if (this._canCast(spell)) {
+        color = "white";
+      }
+      this.display.drawText(54, 15 + i, `%c{${color}}${(i + 1) % 10}: %c{${spell.type.color}}${spell.type.symbol.repeat(spell.cost).padEnd(5)}%c{${color}} ${spell.name}`);
     }
   },
 
@@ -174,10 +338,17 @@ const Game = {
       for (var x = 0; x < this.map[y].length; x++) {
         if (this._getSeen(x, y)) {
           var bgcolor = "#000";
+          var fgcolor = "#FFF";
+          var symbol = this._getTerrain(x, y).chr;
           if (this._getSees(x, y) && this._getTerrain(x, y).light) {
             bgcolor = "#444";
+            const item = this._getTopItem(x, y);
+            if (item) {
+              fgcolor = item.color;
+              symbol = item.symbol;
+            }
           }
-          this.display.draw(x + 1, y + 1, this._getTerrain(x, y).chr, "#FFF", bgcolor);
+          this.display.draw(x + 1, y + 1, symbol, fgcolor, bgcolor);
         } else {
           this.display.draw(x + 1, y + 1, " ", "#FFF", "#000");
         }
@@ -186,16 +357,16 @@ const Game = {
     this.display.drawOver(this.player.x + 1, this.player.y + 1, '@', null, null);
   },
 
-  _generateMap: function() {
+  _generateMap: function(floor) {
     digger = new ROT.Map.Rogue(this.width, this.height);
     const digCallback = function(x, y, value) {
       if (!this.map[y]) {
         this.map[y] = [];
       }
       if (value == 0) {
-        this.map[y][x] = {terrain: Terrain.Room};
+        this.map[y][x] = {terrain: Terrain.Room, items: []};
       } else {
-        this.map[y][x] = {terrain: Terrain.Rock};
+        this.map[y][x] = {terrain: Terrain.Rock, items: []};
       }
     };
     digger.create(digCallback.bind(this));
@@ -211,16 +382,29 @@ const Game = {
       }
     }
 
-    const stairRoom = ROT.RNG.getItem(digger.rooms.flat());
-    const stairX = stairRoom.x + Math.floor(ROT.RNG.getUniform() * stairRoom.width);
-    const stairY = stairRoom.y + Math.floor(ROT.RNG.getUniform() * stairRoom.height);
+    const rooms = ROT.RNG.shuffle(digger.rooms.flat());
+
+    const stairX = rooms[0].x + randomInt(rooms[0].width);
+    const stairY = rooms[0].y + randomInt(rooms[0].height);
     this.map[stairY][stairX].terrain = Terrain.Stair;
 
-    const startRoom = ROT.RNG.getItem(digger.rooms.flat());
-    this.player.x = startRoom.x + Math.floor(ROT.RNG.getUniform() * startRoom.width);
-    this.player.y = startRoom.y + Math.floor(ROT.RNG.getUniform() * startRoom.height);
+    this.player.x = rooms[1].x + randomInt(rooms[1].width);
+    this.player.y = rooms[1].y + randomInt(rooms[1].height);
+    this.player.floor = floor;
+
+    const cardX = rooms[2].x + randomInt(rooms[2].width);
+    const cardY = rooms[2].y + randomInt(rooms[2].height);
+    this.map[cardY][cardX].items.push(Items.card(ROT.RNG.getItem(Magic.types()), 2));
+
+    for (var i = 3; i < rooms.length; i++) {
+      const goldX = rooms[i].x + randomInt(rooms[i].width);
+      const goldY = rooms[i].y + randomInt(rooms[i].height);
+      this.map[goldY][goldX].items.push(Items.gold(randomInt(floor) + 1));
+    }
+
+    this.map[stairY][stairX].terrain = Terrain.Stair;
     if (!this._getTerrain(this.player.x, this.player.y).enter) {
-      this._generateMap();
+      this._generateMap(floor);
     }
   },
 
