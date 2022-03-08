@@ -18,14 +18,11 @@ const Magic = {
   Green: {color: "#0F0", symbol: "+"},
   Blue: {color: "#88F", symbol: "*"},
   Yellow: {color: "#FF0", symbol: "="},
-
-  types: function() {
-    return [this.Red, this.Green, this.Blue, this.Yellow];
-  },
 };
+Magic.types = [Magic.Red, Magic.Green, Magic.Blue, Magic.Yellow];
 
 const Spells = {
-  Heal: {name: "Heal", type: Magic.Green, cost: 1, heal: 3},
+  MinorHeal: {name: "Minor Heal", type: Magic.Green, cost: 1, heal: 3},
   FireBolt: {name: "Fire Bolt", type: Magic.Red, cost: 1, damage: 5},
   FrostBolt: {name: "Frost Bolt", type: Magic.Blue, cost: 1, damage: 5},
   AcidBolt: {name: "Acid Bolt", type: Magic.Yellow, cost: 1, damage: 5},
@@ -40,6 +37,14 @@ const Items = {
     return {type: "card", card: {type: type, value: value}, color: type.color, symbol: type.symbol};
   },
 };
+
+const Payments = [
+  [[1], [0, 1], [0, 0, 1]],
+  [[2], [0, 1], [0, 0, 1]],
+  [[3], [1, 1], [0, 0, 1], [0, 2]],
+  [[4], [2, 1], [0, 2], [1, 0, 1], [0, 1, 1], [0, 0, 2]],
+  [[5], [3, 1], [1, 2], [2, 0, 1], [0, 1, 1], [0, 3], [0, 0, 2]],
+];
 
 const Game = {
   width: 50,
@@ -63,7 +68,7 @@ const Game = {
     this.player.hp = 50;
     this.player.hp_max = 99;
     this.player.gold = 0;
-    this.player.spellbook = [Spells.Heal, Spells.FireBolt, Spells.FrostBolt, Spells.AcidBolt];
+    this.player.spellbook = [Spells.MinorHeal, Spells.FireBolt, Spells.FrostBolt, Spells.AcidBolt];
     this._generateMap(1);
     this._initDeck();
     this._updateState();
@@ -144,15 +149,23 @@ const Game = {
   _keydown: function(e) {
     switch (e.keyCode) {
       case ROT.KEYS.VK_LEFT:
+      case ROT.KEYS.VK_H:
+      case ROT.KEYS.VK_A:
         this._tryMove(-1, 0);
         break;
       case ROT.KEYS.VK_RIGHT:
+      case ROT.KEYS.VK_L:
+      case ROT.KEYS.VK_D:
         this._tryMove(1, 0);
         break;
       case ROT.KEYS.VK_UP:
+      case ROT.KEYS.VK_K:
+      case ROT.KEYS.VK_W:
         this._tryMove(0, -1);
         break;
       case ROT.KEYS.VK_DOWN:
+      case ROT.KEYS.VK_J:
+      case ROT.KEYS.VK_S:
         this._tryMove(0, 1);
         break;
       case ROT.KEYS.VK_1:
@@ -205,7 +218,7 @@ const Game = {
     this.player.deck = [];
     this.player.discard = [];
     this.player.hand = [];
-    for (const type of Magic.types()) {
+    for (const type of Magic.types) {
       for (var i = 0; i < 4; i++) {
         this.player.deck.push({type: type, value: 1});
       }
@@ -237,19 +250,45 @@ const Game = {
   },
 
   _paySpell: function(spell) {
-    var remaining = spell.cost;
-    const indices = [];
-    for (var i = 0; i < this.player.hand.length && remaining > 0; i++) {
+    const counts = [0, 0, 0];
+    for (var i = 0; i < this.player.hand.length; i++) {
       const card = this.player.hand[i];
       if (card.type == spell.type) {
-        indices.push(i);
-        remaining -= card.value;
+        counts[card.value - 1] += 1;
       }
     }
-    indices.reverse();
-    for (const index of indices) {
-      this.player.discard.push(this.player.hand[index]);
-      this.player.hand.splice(index, 1);
+
+    const attempts = Payments[spell.cost - 1];
+    var solution = null;
+    for (const attempt of attempts) {
+      var valid = true;
+      for (var i = 0; i < attempt.length; i++) {
+        if (attempt[i] > counts[i]) {
+          valid = false;
+          break;
+        }
+      }
+      if (valid) {
+        solution = attempt;
+        break;
+      }
+    }
+
+    if (solution) {
+      for (var i = 0; i < solution.length; i++) {
+        for (var j = 0; j < solution[i]; j++) {
+          for (var k = 0; k < this.player.hand.length; k++) {
+            const card = this.player.hand[k];
+            if (card.type == spell.type && card.value == i + 1) {
+              this.player.discard.push(this.player.hand[k]);
+              this.player.hand.splice(k, 1);
+              break;
+            }
+          }
+        }
+      }
+    } else {
+      console.log("No payment found");
     }
   },
 
@@ -297,7 +336,7 @@ const Game = {
 
     this.display.drawText(2, 32, "Player the Explorer");
     this.display.drawText(2, 33, `HP: ${this.player.hp.toString().padStart(this.player.hp_max.toString().length)} / ${this.player.hp_max}`);
-    this.display.drawText(17, 33, `$${this.player.gold}`);
+    this.display.drawText(17, 33, `%c{#FE2}$${this.player.gold}`);
 
     for (var i = 0; i < this.display.getOptions().height; i++) {
       for (var j = 54; j < this.display.getOptions().width; j++) {
@@ -394,7 +433,7 @@ const Game = {
 
     const cardX = rooms[2].x + randomInt(rooms[2].width);
     const cardY = rooms[2].y + randomInt(rooms[2].height);
-    this.map[cardY][cardX].items.push(Items.card(ROT.RNG.getItem(Magic.types()), 2));
+    this.map[cardY][cardX].items.push(Items.card(ROT.RNG.getItem(Magic.types), 2));
 
     for (var i = 3; i < rooms.length; i++) {
       const goldX = rooms[i].x + randomInt(rooms[i].width);
