@@ -62,7 +62,7 @@ const Game = {
 
   init: function() {
     this.display = new ROT.Display({width: 80, height: 35, fontSize: 15, spacing: 1.1});
-    document.body.appendChild(this.display.getContainer());
+    document.getElementById("container").appendChild(this.display.getContainer());
     document.body.addEventListener("keydown", this._keydown.bind(this));
     document.body.addEventListener("keypress", this._keypress.bind(this));
     this.fov = new ROT.FOV.PreciseShadowcasting(this._lightPasses.bind(this));
