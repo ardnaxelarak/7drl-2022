@@ -4,6 +4,10 @@ function randomInt(max) {
   return Math.floor(ROT.RNG.getUniform() * max);
 }
 
+function cardString(card) {
+  return `%c{${card.type.color}}${card.type.symbol.repeat(card.value)}`;
+}
+
 const Colors = {
   Red: "#F66",
   Green: "#0F0",
@@ -125,7 +129,7 @@ const Game = {
     this.storeCards = [];
     for (var i = 0; i <= 1; i++) {
       for (const type of Magic.types) {
-        this.storeCards.push({card: {type: type, value: 2 + i}, cost: 30 + 70 * i});
+        this.storeCards.push({card: {type: type, value: 2 + i}, cost: 20 + 50 * i});
       }
     }
     this.storeMisc = [
@@ -157,6 +161,23 @@ const Game = {
         },
       },
     ];
+    for (const type of Magic.types) {
+      const card = {type: type, value: 1};
+      this.storeMisc.push({
+        remove: card,
+        cost: function() {
+          return 10;
+        },
+        valid: function() {
+          return this._countCard(card) > 0;
+        },
+        action: function() {
+          if (this._removeCard(card)) {
+            this._write(`${cardString(card)}%c{} card removed.`);
+          }
+        },
+      });
+    }
     this.player.target = null;
     this._generateMap(1);
     this._initDeck();
@@ -224,7 +245,7 @@ const Game = {
             break;
           case "card":
             this.player.discard.push(item.card);
-            this._write(`%c{${item.card.type.color}}${item.card.type.symbol.repeat(item.card.value)}%c{} card acquired.`);
+            this._write(`${cardString(item.card)}%c{} card acquired.`);
             break;
         }
       }
@@ -462,7 +483,7 @@ const Game = {
     }
     this.player.gold -= item.cost;
     this.player.discard.push(item.card);
-    this._write(`%c{${item.card.type.color}}${item.card.type.symbol.repeat(item.card.value)}%c{} card acquired.`);
+    this._write(`${cardString(item.card)}%c{} card acquired.`);
     this._updateState();
   },
 
@@ -646,6 +667,55 @@ const Game = {
     this._updateState();
   },
 
+  _cardMatches: function(a, b) {
+    return a.type == b.type && a.value == b.value;
+  },
+
+  _countCard: function(card) {
+    var count = 0;
+    for (const c of this.player.discard) {
+      if (this._cardMatches(card, c)) {
+        count++;
+      }
+    }
+    for (const c of this.player.deck) {
+      if (this._cardMatches(card, c)) {
+        count++;
+      }
+    }
+    for (const c of this.player.hand) {
+      if (this._cardMatches(card, c)) {
+        count++;
+      }
+    }
+    return count;
+  },
+
+  _removeCard: function(card) {
+    for (var i = 0; i < this.player.discard.length; i++) {
+      const c = this.player.discard[i];
+      if (this._cardMatches(card, c)) {
+        this.player.discard.splice(i, 1);
+        return true;
+      }
+    }
+    for (var i = 0; i < this.player.deck.length; i++) {
+      const c = this.player.deck[i];
+      if (this._cardMatches(card, c)) {
+        this.player.deck.splice(i, 1);
+        return true;
+      }
+    }
+    for (var i = 0; i < this.player.hand.length; i++) {
+      const c = this.player.hand[i];
+      if (this._cardMatches(card, c)) {
+        this.player.hand.splice(i, 1);
+        return true;
+      }
+    }
+    return false;
+  },
+
   _getSortedTargetList: function() {
     const list = [];
     for (const creature of this.creatures) {
@@ -748,7 +818,7 @@ const Game = {
         if (item.cost > this.player.gold) {
           color = "#666";
         }
-        var line = `%c{${card.type.color}}${card.type.symbol.repeat(card.value)}%c{${color}} Card`;
+        var line = `${cardString(card)} Card`;
         this.display.drawText(2, linenum++, `#%c{${color}} C${(i + 1) % 10}: %c{${Colors.Gold}}${("$" + item.cost).padStart(5)}%c{${color}} ${line}`);
       }
       this.display.drawText(2, linenum++, "#");
@@ -760,7 +830,13 @@ const Game = {
         if (cost > this.player.gold || !item.valid.bind(this)()) {
           color = "#666";
         }
-        this.display.drawText(2, linenum++, `#%c{${color}}  ${(i + 1) % 10}: %c{${Colors.Gold}}${("$" + cost).padStart(5)}%c{${color}} ${item.name}`);
+        var line = item.name;
+        if (!line) {
+          if (item.remove) {
+            line = `Remove ${cardString(item.remove)}%c{${color}} Card (${this._countCard(item.remove)} in deck)`;
+          }
+        }
+        this.display.drawText(2, linenum++, `#%c{${color}}  ${(i + 1) % 10}: %c{${Colors.Gold}}${("$" + cost).padStart(5)}%c{${color}} ${line}`);
       }
       this.display.drawText(2, linenum++, "#");
       this.display.drawText(2, linenum++,  "#".repeat(50));
