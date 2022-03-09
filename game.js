@@ -29,7 +29,7 @@ const Spells = {
 };
 
 const Creatures = {
-  Kobold: {name: "kobold", color: "#D83", symbol: "k", health: 5, damage: 1},
+  Kobold: {name: "kobold", color: "#D83", symbol: "k", health: 5, damage: 1, level: 1},
 };
 
 const Items = {
@@ -59,6 +59,7 @@ const Game = {
   output: [],
   player: {},
   creatures: [],
+  streak: null,
 
   init: function() {
     this.display = new ROT.Display({width: 80, height: 35, fontSize: 15, spacing: 1.1});
@@ -338,17 +339,29 @@ const Game = {
     }
     this._paySpell(spell);
     this._write(`Casted ${spell.name}.`);
-    if (spell.heal) {
-      this.player.hp = Math.min(this.player.hp_max, this.player.hp + spell.heal);
+    var modifier = 0;
+    if (this.streak && this.streak.type == spell.type) {
+      modifier = this.streak.length;
+      this.streak.length += 1;
+    } else {
+      this.streak = {type: spell.type, length: 1};
     }
-    if (spell.damage) {
-      this.player.target.hp = Math.max(0, this.player.target.hp - spell.damage);
+    if (spell.heal && spell.heal > modifier) {
+      this.player.hp = Math.min(this.player.hp_max, this.player.hp + spell.heal - modifier);
+    }
+    if (spell.damage && spell.damage > modifier) {
+      this.player.target.hp = Math.max(0, this.player.target.hp - spell.damage + modifier);
       if (this.player.target.hp <= 0) {
-        const index = this.creatures.indexOf(this.player.target);
+        const creature = this.player.target;
+        const index = this.creatures.indexOf(creature);
         if (index >= 0) {
           this.creatures.splice(index, 1);
         }
-        this._write(`Killed the ${this.player.target.type.name}.`);
+        this._write(`Killed the ${creature.type.name}.`);
+        const gold = randomInt(creature.type.level + 1);
+        if (gold > 0) {
+          this.map[creature.y][creature.x].items.push(Items.gold(gold));
+        }
         this.player.target = null;
       }
     }
@@ -494,6 +507,7 @@ const Game = {
     this._drawMap();
 
     this.display.drawText(2, 32, "Player the Explorer");
+    this.display.drawText(25, 32, `Depth: ${this.player.floor}`);
     this.display.drawText(2, 33, `HP: ${this.player.hp.toString().padStart(this.player.hp_max.toString().length)} / ${this.player.hp_max}`);
     this.display.drawText(17, 33, `%c{#FE2}$${this.player.gold}`);
 
@@ -527,7 +541,11 @@ const Game = {
       if (this._canCast(spell)) {
         color = "white";
       }
-      this.display.drawText(54, 15 + i, `%c{${color}}${(i + 1) % 10}: %c{${spell.type.color}}${spell.type.symbol.repeat(spell.cost).padEnd(5)}%c{${color}} ${spell.name}`);
+      var modifier = "";
+      if (this.streak && spell.type == this.streak.type) {
+        modifier = `%c{#F66} (-${this.streak.length})%c{${color}}`;
+      }
+      this.display.drawText(54, 15 + i, `%c{${color}}${(i + 1) % 10}: %c{${spell.type.color}}${spell.type.symbol.repeat(spell.cost).padEnd(5)}%c{${color}} ${spell.name}${modifier}`);
     }
   },
 
@@ -611,24 +629,37 @@ const Game = {
     const cardY = rooms[2].y + randomInt(rooms[2].height);
     this.map[cardY][cardX].items.push(Items.card(ROT.RNG.getItem(Magic.types), 2));
 
+    for (var i = 3; i < rooms.length; i++) {
+      const goldX = rooms[i].x + randomInt(rooms[i].width);
+      const goldY = rooms[i].y + randomInt(rooms[i].height);
+      this.map[goldY][goldX].items.push(Items.gold(5 * (randomInt(floor) + 1)));
+    }
+
+    this.map[stairY][stairX].terrain = Terrain.Stair;
+    if (!this._getTerrain(this.player.x, this.player.y).enter) {
+      return this._generateMap(floor);
+    }
+
+    const pathfinder = new ROT.Path.AStar(stairX, stairY, this._passability(null), {topology: 4});
+    valid = false;
+    const pathCallback = function(x, y) {
+      if (x == stairX && y == stairY) {
+        valid = true;
+      }
+    };
+    pathfinder.compute(this.player.x, this.player.y, pathCallback.bind(this));
+
+    if (!valid) {
+      return this._generateMap(floor);
+    }
+
     const placements = ROT.RNG.shuffle(spaces);
-    for (var i = 0; i < Math.min(12, placements.length); i++) {
+    for (var i = 0; i < Math.min(20 + randomInt(5 * floor), placements.length); i++) {
       const space = placements[i];
       if (space.x == this.player.x && space.y == this.player.y) {
         continue;
       }
       this._createMonster(space.x, space.y, Creatures.Kobold);
-    }
-
-    for (var i = 3; i < rooms.length; i++) {
-      const goldX = rooms[i].x + randomInt(rooms[i].width);
-      const goldY = rooms[i].y + randomInt(rooms[i].height);
-      this.map[goldY][goldX].items.push(Items.gold(randomInt(floor) + 1));
-    }
-
-    this.map[stairY][stairX].terrain = Terrain.Stair;
-    if (!this._getTerrain(this.player.x, this.player.y).enter) {
-      this._generateMap(floor);
     }
   },
 
