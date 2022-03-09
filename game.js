@@ -28,6 +28,10 @@ const Spells = {
   AcidBolt: {name: "Acid Bolt", type: Magic.Yellow, cost: 1, damage: 5},
 };
 
+const Creatures = {
+  Kobold: {name: "kobold", color: "#D83", symbol: "k", health: 5, damage: 1},
+};
+
 const Items = {
   gold: function(amount) {
     return {type: "gold", amount: amount, color: "#FE2", symbol: "$"};
@@ -54,6 +58,7 @@ const Game = {
   fov: null,
   output: [],
   player: {},
+  creatures: [],
 
   init: function() {
     this.display = new ROT.Display({width: 80, height: 35, fontSize: 15, spacing: 1.1});
@@ -65,13 +70,18 @@ const Game = {
   },
 
   _initGame: function() {
-    this.player.hp = 50;
-    this.player.hp_max = 99;
+    this.player.hp = 10;
+    this.player.hp_max = 10;
     this.player.gold = 0;
     this.player.spellbook = [Spells.MinorHeal, Spells.FireBolt, Spells.FrostBolt, Spells.AcidBolt];
+    this.player.target = null;
     this._generateMap(1);
     this._initDeck();
     this._updateState();
+  },
+
+  _createMonster: function(x, y, type) {
+    this.creatures.push({x: x, y: y, type: type, hp: type.health});
   },
 
   _getTerrain: function(x, y) {
@@ -135,12 +145,27 @@ const Game = {
     return this._getTerrain(x, y).light;
   },
 
+  _passability: function(entity) {
+    const callback = function(x, y) {
+      if (!this._getTerrain(x, y).enter) {
+        return false;
+      }
+      for (const creature of this.creatures) {
+        if (creature != entity && creature.x == x && creature.y == y) {
+          return false;
+        }
+      }
+      return true;
+    };
+    return callback.bind(this);
+  },
+
   _tryMove: function(xd, yd) {
-    if (this._getTerrain(this.player.x + xd, this.player.y + yd).enter) {
+    if (this._passability(null)(this.player.x + xd, this.player.y + yd)) {
       this.player.x += xd;
       this.player.y += yd;
       this._pickUp(this.player.x, this.player.y);
-      this._updateState();
+      this._tick();
       return true;
     }
     return false;
@@ -198,6 +223,14 @@ const Game = {
       case ROT.KEYS.VK_0:
         this._castSpell(9);
         break;
+      case ROT.KEYS.VK_OPEN_BRACKET:
+      case ROT.KEYS.VK_P:
+        this._prevTarget();
+        break;
+      case ROT.KEYS.VK_CLOSE_BRACKET:
+      case ROT.KEYS.VK_N:
+        this._nextTarget();
+        break;
     }
   },
 
@@ -208,7 +241,7 @@ const Game = {
         if (this._getTerrain(this.player.x, this.player.y).descend) {
           this._write(`Descending to depth ${this.player.floor + 1}.`);
           this._generateMap(this.player.floor + 1);
-          this._updateState();
+          this._tick();
         }
         break;
     }
@@ -297,8 +330,29 @@ const Game = {
     if (!spell || !this._canCast(spell)) {
       return;
     }
+    if (spell.heal && this.player.hp >= this.player.hp_max) {
+      return;
+    }
+    if (spell.damage && !this.player.target) {
+      return;
+    }
     this._paySpell(spell);
-    this._updateState();
+    this._write(`Casted ${spell.name}.`);
+    if (spell.heal) {
+      this.player.hp = Math.min(this.player.hp_max, this.player.hp + spell.heal);
+    }
+    if (spell.damage) {
+      this.player.target.hp = Math.max(0, this.player.target.hp - spell.damage);
+      if (this.player.target.hp <= 0) {
+        const index = this.creatures.indexOf(this.player.target);
+        if (index >= 0) {
+          this.creatures.splice(index, 1);
+        }
+        this._write(`Killed the ${this.player.target.type.name}.`);
+        this.player.target = null;
+      }
+    }
+    this._tick();
   },
 
   _write: function(text) {
@@ -319,6 +373,104 @@ const Game = {
     return text;
   },
 
+  _tick: function() {
+    for (const creature of this.creatures) {
+      creature.sees_player = false;
+      creature.moved = false;
+      const sightCallback = function(x, y, r, visibility) {
+        if (x == this.player.x && y == this.player.y) {
+          creature.sees_player = true;
+        }
+      };
+
+      this.fov.compute(creature.x, creature.y, 10, sightCallback.bind(this));
+
+      if (creature.sees_player) {
+        if (Math.abs(creature.x - this.player.x) <= 1 && Math.abs(creature.y - this.player.y) <= 1) {
+          this.player.hp = Math.max(0, this.player.hp - creature.type.damage);
+          this._write(`The ${creature.type.name} hits!`);
+          if (this.player.hp <= 0) {
+            this._write("You are dead.");
+          }
+          creature.moved = true;
+        } else {
+          const pathfinder = new ROT.Path.AStar(this.player.x, this.player.y, this._passability(creature), {topology: 4});
+          const pathCallback = function(x, y) {
+            if (creature.moved || (creature.x == x && creature.y == y)) {
+              return;
+            }
+            creature.x = x;
+            creature.y = y;
+            creature.moved = true;
+          };
+          pathfinder.compute(creature.x, creature.y, pathCallback.bind(this));
+        }
+      }
+    }
+    this._updateState();
+  },
+
+  _getSortedTargetList: function() {
+    const list = [];
+    for (const creature of this.creatures) {
+      if (this._getSees(creature.x, creature.y)) {
+        const dx = creature.x - this.player.x;
+        const dy = creature.y - this.player.y;
+        list.push({creature: creature, dist2: dx * dx + dy * dy});
+      }
+    }
+    list.sort(this._cmpTarget);
+    return list;
+  },
+
+  _cmpTarget: function(a, b) {
+    return a.dist2 - b.dist2;
+  },
+
+  _targetIndex: function(list, creature) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].creature == creature) {
+        return i;
+      }
+    }
+    return -1;
+  },
+
+  _prevTarget: function() {
+    const list = this._getSortedTargetList();
+    if (list.length == 0) {
+      return;
+    }
+    var index = this._targetIndex(list, this.player.target);
+    if (index < 0) {
+      index = 0;
+    }
+    const newIndex = (index - 1 + list.length) % list.length;
+    this.player.target = list[newIndex].creature;
+    this._updateState();
+  },
+
+  _nextTarget: function() {
+    const list = this._getSortedTargetList();
+    if (list.length == 0) {
+      return;
+    }
+    var index = this._targetIndex(list, this.player.target);
+    if (index < 0) {
+      index = -1;
+    }
+    const newIndex = (index + 1) % list.length;
+    this.player.target = list[newIndex].creature;
+    this._updateState();
+  },
+
+  _findTarget: function() {
+    const list = this._getSortedTargetList();
+    if (list.length > 0) {
+      this.player.target = list[0].creature;
+    }
+  },
+
   _updateState: function() {
     for (var y = 0; y < this.map.length; y++) {
       for (var x = 0; x < this.map[y].length; x++) {
@@ -331,6 +483,13 @@ const Game = {
     };
 
     this.fov.compute(this.player.x, this.player.y, 7, callback.bind(this));
+
+    if (this.player.target && !this._getSees(this.player.target.x, this.player.target.y)) {
+      this.player.target = null;
+    }
+    if (!this.player.target) {
+      this._findTarget();
+    }
 
     this._drawMap();
 
@@ -393,7 +552,16 @@ const Game = {
         }
       }
     }
-    this.display.drawOver(this.player.x + 1, this.player.y + 1, '@', null, null);
+
+    for (const creature of this.creatures) {
+      if (this._getSees(creature.x, creature.y)) {
+        this.display.drawOver(creature.x + 1, creature.y + 1, creature.type.symbol, creature.type.color, null);
+        if (creature == this.player.target) {
+          this.display.drawOver(creature.x + 1, creature.y + 1, null, "#000", "#FFF");
+        }
+      }
+    }
+    this.display.drawOver(this.player.x + 1, this.player.y + 1, '@', "#FFF", null);
   },
 
   _generateMap: function(floor) {
@@ -403,12 +571,14 @@ const Game = {
         this.map[y] = [];
       }
       if (value == 0) {
-        this.map[y][x] = {terrain: Terrain.Room, items: []};
+        this.map[y][x] = {terrain: Terrain.Corridor, items: []};
       } else {
         this.map[y][x] = {terrain: Terrain.Rock, items: []};
       }
     };
     digger.create(digCallback.bind(this));
+
+    const spaces = [];
 
     for (const room of digger.rooms.flat()) {
       for (var i = 0; i < room.width + 2; i++) {
@@ -418,6 +588,12 @@ const Game = {
       for (var i = 0; i < room.height + 2; i++) {
         this._setWall(room.x - 1, room.y + i - 1);
         this._setWall(room.x + room.width, room.y + i - 1);
+      }
+      for (var j = 0; j < room.height; j++) {
+        for (var i = 0; i < room.width; i++) {
+          this.map[room.y + j][room.x + i].type = Terrain.Room;
+          spaces.push({x: room.x + i, y: room.y + j});
+        }
       }
     }
 
@@ -435,6 +611,15 @@ const Game = {
     const cardY = rooms[2].y + randomInt(rooms[2].height);
     this.map[cardY][cardX].items.push(Items.card(ROT.RNG.getItem(Magic.types), 2));
 
+    const placements = ROT.RNG.shuffle(spaces);
+    for (var i = 0; i < Math.min(12, placements.length); i++) {
+      const space = placements[i];
+      if (space.x == this.player.x && space.y == this.player.y) {
+        continue;
+      }
+      this._createMonster(space.x, space.y, Creatures.Kobold);
+    }
+
     for (var i = 3; i < rooms.length; i++) {
       const goldX = rooms[i].x + randomInt(rooms[i].width);
       const goldY = rooms[i].y + randomInt(rooms[i].height);
@@ -448,7 +633,7 @@ const Game = {
   },
 
   _setWall: function(x, y) {
-    if (this._getTerrain(x, y) == Terrain.Room) {
+    if (this._getTerrain(x, y) == Terrain.Corridor) {
       this.map[y][x].terrain = Terrain.Door;
     } else {
       this.map[y][x].terrain = Terrain.Wall;
