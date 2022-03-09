@@ -1,5 +1,3 @@
-var digger;
-
 function randomInt(max) {
   return Math.floor(ROT.RNG.getUniform() * max);
 }
@@ -150,7 +148,7 @@ const Game = {
       {
         name: "Full Heal",
         cost: function() {
-          return 2 * Math.floor(this.player.hp_max / 5);
+          return 4 + this.player.floor;
         },
         valid: function() {
           return this.player.hp < this.player.hp_max;
@@ -662,6 +660,16 @@ const Game = {
           };
           pathfinder.compute(creature.x, creature.y, pathCallback.bind(this));
         }
+      } else {
+        const directions = [{x: 0, y: 0}, {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}];
+        const attempts = ROT.RNG.shuffle(directions);
+        for (const dir of attempts) {
+          if (this._passability(creature)(creature.x + dir.x, creature.y + dir.y)) {
+            creature.x += dir.x;
+            creature.y += dir.y;
+            break;
+          }
+        }
       }
     }
     this._updateState();
@@ -961,7 +969,7 @@ const Game = {
 
   _generateMap: function(floor) {
     this.creatures = [];
-    digger = new ROT.Map.Rogue(this.width, this.height);
+    const digger = new ROT.Map.Rogue(this.width, this.height);
     const digCallback = function(x, y, value) {
       if (!this.map[y]) {
         this.map[y] = [];
