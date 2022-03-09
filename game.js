@@ -26,10 +26,17 @@ const Spells = {
   FireBolt: {name: "Fire Bolt", type: Magic.Red, cost: 1, damage: 5},
   FrostBolt: {name: "Frost Bolt", type: Magic.Blue, cost: 1, damage: 5},
   AcidBolt: {name: "Acid Bolt", type: Magic.Yellow, cost: 1, damage: 5},
+  Heal: {name: "Heal", type: Magic.Green, cost: 2, heal: 7},
+  FireBlast: {name: "Fire Blast", type: Magic.Red, cost: 2, damage: 11},
+  FrostBlast: {name: "Frost Blast", type: Magic.Blue, cost: 2, damage: 11},
+  AcidBlast: {name: "Acid Blast", type: Magic.Yellow, cost: 2, damage: 11},
 };
 
 const Creatures = {
-  Kobold: {name: "kobold", color: "#D83", symbol: "k", health: 5, damage: 1, level: 1},
+  GridBug: {name: "grid bug", color: "#F1E", symbol: "x", health: 5, damage: 1, level: 1},
+  GiantAnt: {name: "giant ant", color: "#B72", symbol: "a", health: 8, damage: 2, level: 2},
+  Jackal: {name: "jackal", color: "#B72", symbol: "d", health: 11, damage: 3, level: 3},
+  Kobold: {name: "kobold", color: "#D83", symbol: "k", health: 23, damage: 4, level: 4},
 };
 
 const Items = {
@@ -74,15 +81,22 @@ const Game = {
     this.player.hp = 10;
     this.player.hp_max = 10;
     this.player.gold = 0;
-    this.player.spellbook = [Spells.MinorHeal, Spells.FireBolt, Spells.FrostBolt, Spells.AcidBolt];
+    this.player.spellbook = [Spells.MinorHeal, Spells.FireBolt, Spells.FrostBolt, Spells.AcidBolt, Spells.Heal, Spells.FireBlast, Spells.FrostBlast, Spells.AcidBlast];
     this.player.target = null;
     this._generateMap(1);
     this._initDeck();
     this._updateState();
   },
 
-  _createMonster: function(x, y, type) {
-    this.creatures.push({x: x, y: y, type: type, hp: type.health});
+  _createMonster: function(x, y, floor) {
+    const types = ROT.RNG.shuffle(Object.values(Creatures));
+    var i = 0;
+    while (i < types.length && types[i].level > floor) {
+      i += 1;
+    }
+    if (i < types.length) {
+      this.creatures.push({x: x, y: y, type: types[i], hp: types[i].health});
+    }
   },
 
   _getTerrain: function(x, y) {
@@ -659,7 +673,7 @@ const Game = {
       if (space.x == this.player.x && space.y == this.player.y) {
         continue;
       }
-      this._createMonster(space.x, space.y, Creatures.Kobold);
+      this._createMonster(space.x, space.y, floor);
     }
   },
 
