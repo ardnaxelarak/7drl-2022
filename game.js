@@ -40,9 +40,13 @@ const Spells = {
   FireBlast: {name: "Fire Blast", type: Magic.Red, cost: 2, damage: 11},
   FrostBlast: {name: "Frost Blast", type: Magic.Blue, cost: 2, damage: 11},
   AcidBlast: {name: "Acid Blast", type: Magic.Yellow, cost: 2, damage: 11},
+  MajorHeal: {name: "Major Heal", type: Magic.Green, cost: 3, heal: 12},
   FireBall: {name: "Fireball", type: Magic.Red, cost: 3, damage: 15, radius: 1},
   FrostBall: {name: "Frost Orb", type: Magic.Blue, cost: 3, damage: 15, radius: 1},
   AcidBall: {name: "Acid Splash", type: Magic.Yellow, cost: 3, damage: 15, radius: 1},
+  FireBurst: {name: "Inferno", type: Magic.Red, cost: 4, damage: 25, radius: 3},
+  FrostBurst: {name: "Blizzard", type: Magic.Blue, cost: 4, damage: 25, radius: 3},
+  AcidBurst: {name: "Acid Rain", type: Magic.Yellow, cost: 4, damage: 25, radius: 3},
 };
 
 const Creatures = {
@@ -120,9 +124,13 @@ const Game = {
       {spell: Spells.FireBlast, cost: 30},
       {spell: Spells.FrostBlast, cost: 30},
       {spell: Spells.AcidBlast, cost: 30},
+      {spell: Spells.MajorHeal, cost: 70},
       {spell: Spells.FireBall, cost: 100},
       {spell: Spells.FrostBall, cost: 100},
       {spell: Spells.AcidBall, cost: 100},
+      {spell: Spells.FireBurst, cost: 200},
+      {spell: Spells.FrostBurst, cost: 200},
+      {spell: Spells.AcidBurst, cost: 200},
     ];
     this.storeCards = [];
     for (var i = 0; i <= 1; i++) {
@@ -794,7 +802,7 @@ const Game = {
 
     if (this.store) {
       var linenum = 1;
-      this.display.drawText(2, linenum++, "############ The Kerfuffal's Cravings ############");
+      this.display.drawText(2, linenum++, "############### The Mage's Market ################");
       this.display.drawText(2, linenum++, "#%c{white} === Spells (shift + number) ===");
       var color = "";
       for (i = 0; i < this.storeSpells.length; i++) {
@@ -819,7 +827,8 @@ const Game = {
       }
       this.display.drawText(2, linenum++, "#");
       this.display.drawText(2, linenum++, "#%c{white} === Cards (ctrl + number) ===");
-      for (i = 0; i < this.storeCards.length; i++) {
+      const firstHalf = Math.ceil(this.storeCards.length / 2);
+      for (i = 0; i < firstHalf; i++) {
         const item = this.storeCards[i];
         const card = item.card;
         color = "";
@@ -829,6 +838,18 @@ const Game = {
         var line = `${cardString(card)} Card`;
         this.display.drawText(2, linenum++, `#%c{${color}} C${(i + 1) % 10}: %c{${Colors.Gold}}${("$" + item.cost).padStart(5)}%c{${color}} ${line}`);
       }
+      linenum -= firstHalf;
+      for (i = firstHalf; i < this.storeCards.length; i++) {
+        const item = this.storeCards[i];
+        const card = item.card;
+        color = "";
+        if (item.cost > this.player.gold) {
+          color = "#666";
+        }
+        var line = `${cardString(card)} Card`;
+        this.display.drawText(28, linenum++, `%c{${color}}C${(i + 1) % 10}: %c{${Colors.Gold}}${("$" + item.cost).padStart(5)}%c{${color}} ${line}`);
+      }
+      linenum += this.storeCards.length % 2;
       this.display.drawText(2, linenum++, "#");
       this.display.drawText(2, linenum++, "#%c{white} === Miscellaneous ===");
       for (i = 0; i < this.storeMisc.length; i++) {
