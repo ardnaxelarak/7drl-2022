@@ -6,6 +6,10 @@ function cardString(card) {
   return `%c{${card.type.color}}${card.type.symbol.repeat(card.value)}`;
 }
 
+function capitalize(string) {
+  return string[0].toUpperCase() + string.slice(1);
+}
+
 const Colors = {
   Red: "#F66",
   Green: "#0F0",
@@ -50,16 +54,16 @@ const Spells = {
 };
 
 const Creatures = {
-  GridBug: {name: "grid bug", color: "#F1E", symbol: "x", health: 5, damage: 1, level: 1},
-  Snake: {name: "snake", color: "#6F6", symbol: "S", health: 4, damage: 1, level: 1},
-  GiantAnt: {name: "giant ant", color: "#B72", symbol: "a", health: 8, damage: 2, level: 2},
-  CaveSpider: {name: "cave spider", color: "#BBB", symbol: "s", health: 10, damage: 1, level: 2},
-  RedJelly: {name: "red jelly", color: Colors.Red, symbol: "j", health: 11, damage: 1, level: 3, immune: ["Red"]},
-  BlueJelly: {name: "blue jelly", color: Colors.Blue, symbol: "j", health: 11, damage: 1, level: 3, immune: ["Blue"]},
-  YellowJelly: {name: "acid jelly", color: Colors.Yellow, symbol: "j", health: 11, damage: 1, level: 3, immune: ["Yellow"]},
-  Jackal: {name: "jackal", color: "#B72", symbol: "d", health: 11, damage: 3, level: 4},
-  Kobold: {name: "kobold", color: "#D83", symbol: "k", health: 22, damage: 3, level: 5},
-  RedDragon: {name: "red dragon", color: "#F66", symbol: "D", health: 100, damage: 5, level: 6},
+  GridBug: {name: "grid bug", color: "#F1E", symbol: "x", health: 5, damage: 1, level: 1, weight: 1},
+  Snake: {name: "snake", color: "#6F6", symbol: "S", health: 4, damage: 1, level: 1, weight: 1},
+  GiantAnt: {name: "giant ant", color: "#B72", symbol: "a", health: 8, damage: 2, level: 2, weight: 2},
+  CaveSpider: {name: "cave spider", color: "#BBB", symbol: "s", health: 10, damage: 1, level: 2, weight: 2},
+  RedJelly: {name: "red jelly", color: Colors.Red, symbol: "j", health: 11, damage: 2, level: 3, immune: ["Red"], weight: 2},
+  BlueJelly: {name: "blue jelly", color: Colors.Blue, symbol: "j", health: 11, damage: 2, level: 3, immune: ["Blue"], weight: 2},
+  YellowJelly: {name: "acid jelly", color: Colors.Yellow, symbol: "j", health: 11, damage: 2, level: 3, immune: ["Yellow"], weight: 2},
+  Jackal: {name: "jackal", color: "#B72", symbol: "d", health: 11, damage: 3, level: 4, weight: 6},
+  Kobold: {name: "kobold", color: "#D83", symbol: "k", health: 22, damage: 3, level: 5, weight: 9},
+  RedDragon: {name: "red dragon", color: "#F66", symbol: "D", health: 100, damage: 5, level: 6, weight: 10},
 };
 
 const Items = {
@@ -194,14 +198,19 @@ const Game = {
   },
 
   _createMonster: function(x, y, floor) {
-    const types = ROT.RNG.shuffle(Object.values(Creatures));
-    var i = 0;
-    while (i < types.length && types[i].level > floor) {
-      i += 1;
+    const weights = {};
+    for (const creature of Object.keys(Creatures)) {
+      if (Creatures[creature].level <= floor) {
+        weights[creature] = Creatures[creature].weight;
+      }
     }
-    if (i < types.length) {
-      this.creatures.push({x: x, y: y, type: types[i], hp: types[i].health});
+    const typeName = ROT.RNG.getWeightedValue(weights);
+    const type = Creatures[typeName];
+    var name = `the ${type.name}`;
+    if (type.proper_name) {
+      name = type.proper_name;
     }
+    this.creatures.push({name: name, x: x, y: y, type: type, hp: type.health});
   },
 
   _getTerrain: function(x, y) {
@@ -600,17 +609,17 @@ const Game = {
       }
       for (const target of targets) {
         if (target.type.immune && target.type.immune.includes(spell.type.key)) {
-          this._write(`The ${target.type.name} is unaffected by ${spell.name}.`);
+          this._write(`${capitalize(target.name)} is unaffected by ${spell.name}.`);
           continue;
         }
         target.hp = Math.max(0, target.hp - spell.damage + modifier);
-        this._write(`${spell.name} deals ${spell.damage - modifier} damage to the ${target.type.name}.`);
+        this._write(`${spell.name} deals ${spell.damage - modifier} damage to ${target.name}.`);
         if (target.hp <= 0) {
           const index = this.creatures.indexOf(target);
           if (index >= 0) {
             this.creatures.splice(index, 1);
           }
-          this._write(`Killed the ${target.type.name}.`);
+          this._write(`Killed ${target.type.name}.`);
           const gold = randomInt(target.type.level + 1);
           if (gold > 0) {
             this.map[target.y][target.x].items.push(Items.gold(gold));
@@ -657,7 +666,7 @@ const Game = {
       if (creature.sees_player) {
         if (Math.abs(creature.x - this.player.x) <= 1 && Math.abs(creature.y - this.player.y) <= 1) {
           this.player.hp = Math.max(0, this.player.hp - creature.type.damage);
-          this._write(`The ${creature.type.name} hits!`);
+          this._write(`${capitalize(creature.name)} hits!`);
           creature.moved = true;
           if (this.player.hp <= 0) {
             this._write("You are dead. Press R to restart.");
