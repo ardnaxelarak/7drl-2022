@@ -24,10 +24,10 @@ const Terrain = {
 };
 
 const Magic = {
-  Green: {color: "#0F0", symbol: "+"},
-  Red: {color: "#F66", symbol: "!"},
-  Blue: {color: "#88F", symbol: "*"},
-  Yellow: {color: "#FF0", symbol: "="},
+  Green: {key: "Green", color: Colors.Green, symbol: "+"},
+  Red: {key: "Red", color: Colors.Red, symbol: "!"},
+  Blue: {key: "Blue", color: Colors.Blue, symbol: "*"},
+  Yellow: {key: "Yellow", color: Colors.Yellow, symbol: "="},
 };
 Magic.types = [Magic.Green, Magic.Red, Magic.Blue, Magic.Yellow];
 
@@ -54,8 +54,11 @@ const Creatures = {
   Snake: {name: "snake", color: "#6F6", symbol: "S", health: 4, damage: 1, level: 1},
   GiantAnt: {name: "giant ant", color: "#B72", symbol: "a", health: 8, damage: 2, level: 2},
   CaveSpider: {name: "cave spider", color: "#BBB", symbol: "s", health: 10, damage: 1, level: 2},
-  Jackal: {name: "jackal", color: "#B72", symbol: "d", health: 11, damage: 3, level: 3},
-  Kobold: {name: "kobold", color: "#D83", symbol: "k", health: 22, damage: 3, level: 4},
+  RedJelly: {name: "red jelly", color: Colors.Red, symbol: "j", health: 11, damage: 1, level: 3, immune: ["Red"]},
+  BlueJelly: {name: "blue jelly", color: Colors.Blue, symbol: "j", health: 11, damage: 1, level: 3, immune: ["Blue"]},
+  YellowJelly: {name: "acid jelly", color: Colors.Yellow, symbol: "j", health: 11, damage: 1, level: 3, immune: ["Yellow"]},
+  Jackal: {name: "jackal", color: "#B72", symbol: "d", health: 11, damage: 3, level: 4},
+  Kobold: {name: "kobold", color: "#D83", symbol: "k", health: 22, damage: 3, level: 5},
   RedDragon: {name: "red dragon", color: "#F66", symbol: "D", health: 100, damage: 5, level: 6},
 };
 
@@ -596,6 +599,10 @@ const Game = {
         }
       }
       for (const target of targets) {
+        if (target.type.immune && target.type.immune.includes(spell.type.key)) {
+          this._write(`The ${target.type.name} is unaffected by ${spell.name}.`);
+          continue;
+        }
         target.hp = Math.max(0, target.hp - spell.damage + modifier);
         this._write(`${spell.name} deals ${spell.damage - modifier} damage to the ${target.type.name}.`);
         if (target.hp <= 0) {
@@ -943,7 +950,7 @@ const Game = {
       var valueText = "(";
       if (this.streak && spell.type == this.streak.type) {
         modifier = this.streak.length;
-        valueText += "%c{#F66}"
+        valueText += `%c{${Colors.Red}}`
       }
       if (spell.heal) {
         valueText += Math.max(0, spell.heal - modifier) + " heal";
