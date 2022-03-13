@@ -63,7 +63,66 @@ const Creatures = {
   YellowJelly: {name: "acid jelly", color: Colors.Yellow, symbol: "j", health: 11, damage: 2, level: 3, immune: ["Yellow"], weight: 2},
   Jackal: {name: "jackal", color: "#B72", symbol: "d", health: 11, damage: 3, level: 4, weight: 6},
   Kobold: {name: "kobold", color: "#D83", symbol: "k", health: 22, damage: 3, level: 5, weight: 9},
-  RedDragon: {name: "red dragon", color: "#F66", symbol: "D", health: 100, damage: 5, level: 6, weight: 10},
+  Gecko: {name: "gecko", color: "#6F6", symbol: ":", health: 100, damage: 1, level: 0, weight: 0},
+  Deceptibat: {name: "deceptibat", color: "#F3E", symbol: "B", health: 4, damage: 1, level: 0, weight: 0},
+  Autocat: {name: "autocat", color: "#F66", symbol: "f", health: 4, damage: 1, level: 0, weight: 0},
+};
+
+const UniqueCreatures = {
+  Geckatron: {
+    name: "Geckatron",
+    proper_name: true,
+    type: Creatures.Gecko,
+    action: function(creature) {
+      if (ROT.RNG.getUniform() >= 0.3) {
+        return false;
+      }
+      const spaces = [];
+      const passability = this._passability(null);
+      for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+          if (passability(creature.x + dx, creature.y + dy)) {
+            spaces.push({x: creature.x + dx, y: creature.y + dy});
+          }
+        }
+      }
+      if (spaces.length > 0) {
+        const space = ROT.RNG.getItem(spaces);
+        this._createMonster(space.x, space.y, this.player.floor, Creatures.Deceptibat);
+        if (this._getSees(space.x, space.y) && this._getSees(creature.x, creature.y)) {
+          this._write(`${capitalize(creature.name)} summons a deceptibat!`);
+        }
+      }
+      return false;
+    },
+  },
+  HoptimusPrime: {
+    name: "Hoptimus Prime",
+    proper_name: true,
+    type: Creatures.Gecko,
+    action: function(creature) {
+      if (ROT.RNG.getUniform() >= 0.3) {
+        return false;
+      }
+      const spaces = [];
+      const passability = this._passability(null);
+      for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+          if (passability(creature.x + dx, creature.y + dy)) {
+            spaces.push({x: creature.x + dx, y: creature.y + dy});
+          }
+        }
+      }
+      if (spaces.length > 0) {
+        const space = ROT.RNG.getItem(spaces);
+        this._createMonster(space.x, space.y, this.player.floor, Creatures.Autocat);
+        if (this._getSees(space.x, space.y) && this._getSees(creature.x, creature.y)) {
+          this._write(`${capitalize(creature.name)} summons an autocat!`);
+        }
+      }
+      return false;
+    },
+  },
 };
 
 const Items = {
@@ -73,6 +132,10 @@ const Items = {
 
   card: function(type, value) {
     return {type: "card", card: {type: type, value: value}, color: type.color, symbol: type.symbol};
+  },
+
+  goal: function(name) {
+    return {name: name, type: "goal", color: "#D5E", symbol: "*"};
   },
 };
 
@@ -95,6 +158,7 @@ const Game = {
   creatures: [],
   streak: null,
   store: false,
+  start: false,
   ctrl: false,
   shift: false,
   storeSpells: [],
@@ -102,18 +166,23 @@ const Game = {
   storeMisc: [],
 
   init: function() {
-    this.display = new ROT.Display({width: 90, height: 35, fontSize: 15, spacing: 1.1});
+    this.display = new ROT.Display({width: 90, height: 35, fontSize: 15, fontFamily: "Comic Mono", spacing: 1.2});
     document.getElementById("container").appendChild(this.display.getContainer());
     document.body.addEventListener("keydown", this._keydown.bind(this));
     document.body.addEventListener("keyup", this._keyup.bind(this));
     document.body.addEventListener("keypress", this._keypress.bind(this));
     this.fov = new ROT.FOV.PreciseShadowcasting(this._lightPasses.bind(this));
-    this._initGame();
+    this.start = true;
+    this._updateState();
   },
 
   _getState: function() {
-    if (this.player.hp <= 0) {
+    if (this.start) {
+      return "start";
+    } else if (this.player.hp <= 0) {
       return "dead";
+    } else if (this.player.goals >= 2) {
+      return "win";
     } else if (this.store) {
       return "store";
     } else {
@@ -122,27 +191,29 @@ const Game = {
   },
 
   _initGame: function() {
+    this.start = false;
     this.player.hp = 10;
     this.player.hp_max = 10;
     this.player.gold = 0;
+    this.player.goals = 0;
     this.player.spellbook = [Spells.MinorHeal, Spells.FireBolt, Spells.FrostBolt, Spells.AcidBolt, Spells.Heal];
     this.output = [];
     this.storeSpells = [
       {spell: Spells.FireBlast, cost: 30},
       {spell: Spells.FrostBlast, cost: 30},
       {spell: Spells.AcidBlast, cost: 30},
-      {spell: Spells.MajorHeal, cost: 70},
-      {spell: Spells.FireBall, cost: 100},
-      {spell: Spells.FrostBall, cost: 100},
-      {spell: Spells.AcidBall, cost: 100},
-      {spell: Spells.FireBurst, cost: 200},
-      {spell: Spells.FrostBurst, cost: 200},
-      {spell: Spells.AcidBurst, cost: 200},
+      {spell: Spells.MajorHeal, cost: 30},
+      {spell: Spells.FireBall, cost: 70},
+      {spell: Spells.FrostBall, cost: 70},
+      {spell: Spells.AcidBall, cost: 70},
+      {spell: Spells.FireBurst, cost: 120},
+      {spell: Spells.FrostBurst, cost: 120},
+      {spell: Spells.AcidBurst, cost: 120},
     ];
     this.storeCards = [];
     for (var i = 0; i <= 1; i++) {
       for (const type of Magic.types) {
-        this.storeCards.push({card: {type: type, value: 2 + i}, cost: 20 + 50 * i});
+        this.storeCards.push({card: {type: type, value: 2 + i}, cost: 20 + 40 * i});
       }
     }
     this.storeMisc = [
@@ -197,19 +268,18 @@ const Game = {
     this._updateState();
   },
 
-  _createMonster: function(x, y, floor) {
-    const weights = {};
-    for (const creature of Object.keys(Creatures)) {
-      if (Creatures[creature].level <= floor) {
-        weights[creature] = Creatures[creature].weight;
+  _createMonster: function(x, y, floor, type) {
+    if (!type) {
+      const weights = {};
+      for (const creature of Object.keys(Creatures)) {
+        if (Creatures[creature].level <= floor) {
+          weights[creature] = Creatures[creature].weight;
+        }
       }
+      const typeName = ROT.RNG.getWeightedValue(weights);
+      type = Creatures[typeName];
     }
-    const typeName = ROT.RNG.getWeightedValue(weights);
-    const type = Creatures[typeName];
-    var name = `the ${type.name}`;
-    if (type.proper_name) {
-      name = type.proper_name;
-    }
+    const name = `the ${type.name}`;
     this.creatures.push({name: name, x: x, y: y, type: type, hp: type.health});
   },
 
@@ -264,6 +334,13 @@ const Game = {
           case "card":
             this.player.discard.push(item.card);
             this._write(`${cardString(item.card)}%c{} card acquired.`);
+            break;
+          case "goal":
+            this.player.goals += 1;
+            this._write(`${item.name} acquired.`);
+            if (this.player.goals >= 2) {
+              this._write(`You win! Press R to play again.`);
+            }
             break;
         }
       }
@@ -366,8 +443,15 @@ const Game = {
         e.preventDefault();
         break;
       case ROT.KEYS.VK_R:
-        if (this._getState() == "dead") {
+        if (!this.ctrl && ["dead", "start", "win"].includes(this._getState())) {
           this._initGame();
+          e.preventDefault();
+        }
+        break;
+      case ROT.KEYS.VK_M:
+        if (this._getState() == "dead" || this._getState() == "win") {
+          this.start = true;
+          this._updateState();
           e.preventDefault();
         }
         break;
@@ -574,9 +658,6 @@ const Game = {
     if (!spell || !this._canCast(spell)) {
       return;
     }
-    if (spell.heal && this.player.hp >= this.player.hp_max) {
-      return;
-    }
     if (spell.damage && !this.player.target) {
       return;
     }
@@ -589,8 +670,9 @@ const Game = {
       this.streak = {type: spell.type, length: 1};
     }
     if (spell.heal && spell.heal > modifier) {
-      this.player.hp = Math.min(this.player.hp_max, this.player.hp + spell.heal - modifier);
-      this._write(`${spell.name} heals ${spell.heal - modifier} hp.`);
+      const healed = Math.min(this.player.hp_max - this.player.hp, spell.heal - modifier);
+      this.player.hp += healed;
+      this._write(`${spell.name} heals ${healed} hp.`);
     }
     if (spell.damage && spell.damage > modifier) {
       const targets = [this.player.target];
@@ -619,7 +701,7 @@ const Game = {
           if (index >= 0) {
             this.creatures.splice(index, 1);
           }
-          this._write(`Killed ${target.type.name}.`);
+          this._write(`Killed ${target.name}.`);
           const gold = randomInt(target.type.level + 1);
           if (gold > 0) {
             this.map[target.y][target.x].items.push(Items.gold(gold));
@@ -663,13 +745,15 @@ const Game = {
 
       this.fov.compute(creature.x, creature.y, 10, sightCallback.bind(this));
 
-      if (creature.sees_player) {
+      if (creature.action && !creature.action.bind(this)(creature)) {
+        // do nothing, they've already done their thing
+      } else if (creature.sees_player) {
         if (Math.abs(creature.x - this.player.x) <= 1 && Math.abs(creature.y - this.player.y) <= 1) {
           this.player.hp = Math.max(0, this.player.hp - creature.type.damage);
           this._write(`${capitalize(creature.name)} hits!`);
           creature.moved = true;
           if (this.player.hp <= 0) {
-            this._write("You are dead. Press R to restart.");
+            this._write("You are dead. Press M to return to the title screen, or press R to restart.");
             break;
           }
         } else {
@@ -809,117 +893,117 @@ const Game = {
     }
   },
 
-  _updateState: function() {
-    for (var i = 0; i < this.display.getOptions().height; i++) {
-      for (var j = 0; j < this.display.getOptions().width; j++) {
-        this.display.draw(j, i, " ");
+  _drawStart: function() {
+    this.display.drawText(36, 2, "%c{white}The Mage's Student");
+    this.display.drawText(42, 4, "a game");
+    this.display.drawText(39, 5, "by karafruit");
+
+    this.display.drawText(10, 8, "As part of your duties studying magic under the illustrious Hylda Elynfox, one day you are sent into the cellars to find some ingredients for a special potion. Armed only with some basic magic spells, you must fight off the many creatures guarding the Newt-Core and the Transformative Cricket...\n\n%c{white}The Mage's Student%c{} is a roguelike deckbuilding game in which your mana to cast spells is represented by cards of four types: Fire, Frost, Acid, and Healing. You start with a basic deck consisting of cards that grant one mana of their type and some basic spells, but as you delve deeper in the cellars you can upgrade your cards and learn new spells. But casting consecutive spells of the same type will lose efficacy...\n\nCreated for the 2022 7DRL Challenge.", 70);
+
+    this.display.drawText(25, 25, "%c{white}Movement: WASD or HJKL or arrow keys");
+    this.display.drawText(18, 27, "%c{white}Previous Target: [ or P          Next Target: ] or N");
+    this.display.drawText(18, 29, "%c{white}Descend Stairs: >    Cast Spells: Numeric Keys (0 - 9)");
+
+    this.display.drawText(34, 31, "%c{#AAF}--- Press R to begin ---");
+
+    this.display.drawText(10, 33, "%c{#FFA}Special Thanks to Willow, KatDevsGames, SapphireSapphic, and Scout_JD");
+  },
+
+  _drawWin: function() {
+    this.display.drawText(14, 10, "Having defeated Geckatron and Hoptimus Prime, you have collected");
+    this.display.drawText(21, 11, "both the Newt-Core and the Transformative Cricket.");
+
+    this.display.drawText(31, 13, "Congratulations! You have won.");
+    this.display.drawText(37, 15, "Thanks for playing!");
+
+    this.display.drawText(28, 28, "Press M to return to the title screen");
+    this.display.drawText(36, 29, "Press R to play again");
+  },
+
+  _drawStore: function() {
+    var linenum = 1;
+    this.display.drawText(2, linenum++, "############### The Mage's Market ################");
+    this.display.drawText(2, linenum++, "#%c{white} === Spells (shift + number) ===");
+    var color = "";
+    for (i = 0; i < this.storeSpells.length; i++) {
+      const item = this.storeSpells[i];
+      const spell = item.spell;
+      color = "";
+      if (item.cost > this.player.gold) {
+        color = "#666";
       }
+      var line = `${spell.name} (%c{${spell.type.color}}${spell.type.symbol.repeat(spell.cost)}%c{${color}}`;
+      if (spell.heal) {
+        line += `, ${spell.heal} healing`;
+      }
+      if (spell.damage) {
+        line += `, ${spell.damage} damage`;
+      }
+      if (spell.radius) {
+        line += `, AoE: ${spell.radius}`;
+      }
+      line += ")";
+      this.display.drawText(2, linenum++, `#%c{${color}} S${(i + 1) % 10}: %c{${Colors.Gold}}${("$" + item.cost).padStart(5)}%c{${color}} ${line}`);
     }
-
-    if (this.store) {
-      var linenum = 1;
-      this.display.drawText(2, linenum++, "############### The Mage's Market ################");
-      this.display.drawText(2, linenum++, "#%c{white} === Spells (shift + number) ===");
-      var color = "";
-      for (i = 0; i < this.storeSpells.length; i++) {
-        const item = this.storeSpells[i];
-        const spell = item.spell;
-        color = "";
-        if (item.cost > this.player.gold) {
-          color = "#666";
-        }
-        var line = `${spell.name} (%c{${spell.type.color}}${spell.type.symbol.repeat(spell.cost)}%c{${color}}`;
-        if (spell.heal) {
-          line += `, ${spell.heal} healing`;
-        }
-        if (spell.damage) {
-          line += `, ${spell.damage} damage`;
-        }
-        if (spell.radius) {
-          line += `, AoE: ${spell.radius}`;
-        }
-        line += ")";
-        this.display.drawText(2, linenum++, `#%c{${color}} S${(i + 1) % 10}: %c{${Colors.Gold}}${("$" + item.cost).padStart(5)}%c{${color}} ${line}`);
+    this.display.drawText(2, linenum++, "#");
+    this.display.drawText(2, linenum++, "#%c{white} === Cards (ctrl + number) ===");
+    const firstHalf = Math.ceil(this.storeCards.length / 2);
+    for (i = 0; i < firstHalf; i++) {
+      const item = this.storeCards[i];
+      const card = item.card;
+      color = "";
+      if (item.cost > this.player.gold) {
+        color = "#666";
       }
-      this.display.drawText(2, linenum++, "#");
-      this.display.drawText(2, linenum++, "#%c{white} === Cards (ctrl + number) ===");
-      const firstHalf = Math.ceil(this.storeCards.length / 2);
-      for (i = 0; i < firstHalf; i++) {
-        const item = this.storeCards[i];
-        const card = item.card;
-        color = "";
-        if (item.cost > this.player.gold) {
-          color = "#666";
-        }
-        var line = `${cardString(card)} Card`;
-        this.display.drawText(2, linenum++, `#%c{${color}} C${(i + 1) % 10}: %c{${Colors.Gold}}${("$" + item.cost).padStart(5)}%c{${color}} ${line}`);
-      }
-      linenum -= firstHalf;
-      for (i = firstHalf; i < this.storeCards.length; i++) {
-        const item = this.storeCards[i];
-        const card = item.card;
-        color = "";
-        if (item.cost > this.player.gold) {
-          color = "#666";
-        }
-        var line = `${cardString(card)} Card`;
-        this.display.drawText(28, linenum++, `%c{${color}}C${(i + 1) % 10}: %c{${Colors.Gold}}${("$" + item.cost).padStart(5)}%c{${color}} ${line}`);
-      }
-      linenum += this.storeCards.length % 2;
-      this.display.drawText(2, linenum++, "#");
-      this.display.drawText(2, linenum++, "#%c{white} === Miscellaneous ===");
-      for (i = 0; i < this.storeMisc.length; i++) {
-        const item = this.storeMisc[i];
-        const cost = item.cost.bind(this)();
-        color = "";
-        if (cost > this.player.gold || !item.valid.bind(this)()) {
-          color = "#666";
-        }
-        var line = item.name;
-        if (!line) {
-          if (item.remove) {
-            line = `Remove ${cardString(item.remove)}%c{${color}} Card (${this._countCard(item.remove)} in deck)`;
-          }
-        }
-        this.display.drawText(2, linenum++, `#%c{${color}}  ${(i + 1) % 10}: %c{${Colors.Gold}}${("$" + cost).padStart(5)}%c{${color}} ${line}`);
-      }
-      this.display.drawText(2, linenum++, "#");
-      this.display.drawText(2, linenum++,  "#".repeat(50));
-      for (var i = 1; i < linenum; i++) {
-        this.display.draw(51, i, "#");
-      }
-      this.display.drawText(17, linenum++, "%c{white}Press C to Continue");
-    } else {
-      for (var y = 0; y < this.map.length; y++) {
-        for (var x = 0; x < this.map[y].length; x++) {
-          this.map[y][x].sees = false;
-        }
-      }
-
-      const callback = function(x, y, r, visibility) {
-        this._sees(x, y);
-      };
-
-      this.fov.compute(this.player.x, this.player.y, 7, callback.bind(this));
-
-      if (this.player.target && !this._getSees(this.player.target.x, this.player.target.y)) {
-        this.player.target = null;
-      }
-      if (!this.player.target) {
-        this._findTarget();
-      }
-
-      this._drawMap();
+      var line = `${cardString(card)} Card`;
+      this.display.drawText(2, linenum++, `#%c{${color}} C${(i + 1) % 10}: %c{${Colors.Gold}}${("$" + item.cost).padStart(5)}%c{${color}} ${line}`);
     }
+    linenum -= firstHalf;
+    for (i = firstHalf; i < this.storeCards.length; i++) {
+      const item = this.storeCards[i];
+      const card = item.card;
+      color = "";
+      if (item.cost > this.player.gold) {
+        color = "#666";
+      }
+      var line = `${cardString(card)} Card`;
+      this.display.drawText(28, linenum++, `%c{${color}}C${(i + 1) % 10}: %c{${Colors.Gold}}${("$" + item.cost).padStart(5)}%c{${color}} ${line}`);
+    }
+    linenum += this.storeCards.length % 2;
+    this.display.drawText(2, linenum++, "#");
+    this.display.drawText(2, linenum++, "#%c{white} === Miscellaneous ===");
+    for (i = 0; i < this.storeMisc.length; i++) {
+      const item = this.storeMisc[i];
+      const cost = item.cost.bind(this)();
+      color = "";
+      if (cost > this.player.gold || !item.valid.bind(this)()) {
+        color = "#666";
+      }
+      var line = item.name;
+      if (!line) {
+        if (item.remove) {
+          line = `Remove ${cardString(item.remove)}%c{${color}} Card (${this._countCard(item.remove)} in deck)`;
+        }
+      }
+      this.display.drawText(2, linenum++, `#%c{${color}}  ${(i + 1) % 10}: %c{${Colors.Gold}}${("$" + cost).padStart(5)}%c{${color}} ${line}`);
+    }
+    this.display.drawText(2, linenum++, "#");
+    this.display.drawText(2, linenum++,  "#".repeat(50));
+    for (var i = 1; i < linenum; i++) {
+      this.display.draw(51, i, "#");
+    }
+    this.display.drawText(17, linenum++, "%c{white}Press C to Continue");
+  },
 
+  _drawFrames: function() {
     if (this._getState() == "dead") {
-      this.display.drawText(2, 32, "Player the Deceased");
+      this.display.drawText(2, 32, "Anburrh the Late Student");
     } else {
-      this.display.drawText(2, 32, "Player the Explorer");
+      this.display.drawText(2, 32, "Anburrh the Student");
     }
-    this.display.drawText(25, 32, `Depth: ${this.player.floor}`);
     this.display.drawText(2, 33, `HP: ${this.player.hp.toString().padStart(this.player.hp_max.toString().length)} / ${this.player.hp_max}`);
     this.display.drawText(17, 33, `%c{${Colors.Gold}}$${this.player.gold}`);
+    this.display.drawText(25, 33, `Depth: ${this.player.floor}`);
 
     this.display.drawText(54, 1, this._getText(), 34);
     for (var i = 10; i < this.display.getOptions().height; i++) {
@@ -941,14 +1025,19 @@ const Game = {
     this.display.drawText(72, 11, "%c{white}Target:");
     if (this.player.target) {
       const target = this.player.target;
-      this.display.draw(72, 12, target.type.symbol, target.type.color);
-      this.display.drawText(74, 12, target.type.name);
-      this.display.drawText(72, 13, `Dmg: ${target.type.damage} HP: ${target.hp}`);
+      var offset = 0;
+      if (target.proper_name) {
+        this.display.drawText(72, 12, `%c{${target.type.color}}${target.name}`);
+        offset = 1;
+      }
+      this.display.draw(72, 12 + offset, target.type.symbol, target.type.color);
+      this.display.drawText(74, 12 + offset, target.type.name);
+      this.display.drawText(72, 13 + offset, `Dmg: ${target.type.damage} HP: ${target.hp}`);
     } else {
       this.display.drawText(72, 12, "[none]");
     }
 
-    this.display.drawText(54, 15, "%c{white}Spellbook:");
+    this.display.drawText(54, 15, `%c{white}Spellbook (${this.player.spellbook.length}/10):`);
     for (var i = 0; i < this.player.spellbook.length; i++) {
       const spell = this.player.spellbook[i];
       var color = "#888";
@@ -965,9 +1054,53 @@ const Game = {
         valueText += Math.max(0, spell.heal - modifier) + " heal";
       } else if (spell.damage) {
         valueText += Math.max(0, spell.damage - modifier) + " dmg";
+        if (spell.radius) {
+          valueText += `, R: ${spell.radius}`;
+        }
       }
       valueText += `%c{${color}})`;
       this.display.drawText(54, 16 + i, `%c{${color}}${(i + 1) % 10}: %c{${spell.type.color}}${spell.type.symbol.repeat(spell.cost).padEnd(5)}%c{${color}} ${spell.name} ${valueText}`);
+    }
+  },
+
+  _updateState: function() {
+    for (var i = 0; i < this.display.getOptions().height; i++) {
+      for (var j = 0; j < this.display.getOptions().width; j++) {
+        this.display.draw(j, i, " ");
+      }
+    }
+
+    const state = this._getState();
+
+    if (state == "start") {
+      this._drawStart();
+    } else if (state == "win") {
+      this._drawWin();
+    } else if (state == "store") {
+      this._drawStore();
+      this._drawFrames();
+    } else if (["map", "dead"].includes(state)) {
+      for (var y = 0; y < this.map.length; y++) {
+        for (var x = 0; x < this.map[y].length; x++) {
+          this.map[y][x].sees = false;
+        }
+      }
+
+      const callback = function(x, y, r, visibility) {
+        this._sees(x, y);
+      };
+
+      this.fov.compute(this.player.x, this.player.y, 7, callback.bind(this));
+
+      if (this.player.target && !this._getSees(this.player.target.x, this.player.target.y)) {
+        this.player.target = null;
+      }
+      if (!this.player.target) {
+        this._findTarget();
+      }
+
+      this._drawMap();
+      this._drawFrames();
     }
   },
 
@@ -1004,8 +1137,69 @@ const Game = {
     this.display.drawOver(this.player.x + 1, this.player.y + 1, '@', "#FFF", null);
   },
 
+  _finalMap: function(floor) {
+    for (var j = 0; j < this.height; j++) {
+      for (var i = 0; i < this.width; i++) {
+        this.map[j][i] = {terrain: Terrain.Rock, items: []};
+      }
+    }
+    for (var i = 9; i < 40; i++) {
+      this.map[1][i].terrain = Terrain.Wall;
+      this.map[13][i].terrain = Terrain.Wall;
+    }
+    for (var j = 2; j < 13; j++) {
+      this.map[j][9].terrain = Terrain.Wall;
+      for (var i = 10; i < 39; i++) {
+        this.map[j][i].terrain = Terrain.Room;
+      }
+      this.map[j][39].terrain = Terrain.Wall;
+    }
+    this.map[13][24].terrain = Terrain.Door;
+    for (var j = 14; j < 23; j++) {
+      this.map[j][24].terrain = Terrain.Corridor;
+    }
+    for (var i = 19; i < 30; i++) {
+      this.map[23][i].terrain = Terrain.Wall;
+      this.map[28][i].terrain = Terrain.Wall;
+    }
+    for (var j = 24; j < 28; j++) {
+      this.map[j][19].terrain = Terrain.Wall;
+      for (var i = 20; i < 29; i++) {
+        this.map[j][i].terrain = Terrain.Room;
+      }
+      this.map[j][29].terrain = Terrain.Wall;
+    }
+    this.map[23][24].terrain = Terrain.Door;
+
+    this.player.x = 24;
+    this.player.y = 27;
+    this.player.floor = floor;
+
+    const c1 = {
+      ...UniqueCreatures.Geckatron,
+      x: 11,
+      y: 3,
+      hp: UniqueCreatures.Geckatron.type.health,
+    };
+    this.creatures.push(c1);
+    this.map[3][11].items.push(Items.goal("The Newt-Core"));
+
+    const c2 = {
+      ...UniqueCreatures.HoptimusPrime,
+      x: 37,
+      y: 3,
+      hp: UniqueCreatures.HoptimusPrime.type.health,
+    };
+    this.creatures.push(c2);
+    this.map[3][37].items.push(Items.goal("The Transformative Cricket"));
+  },
+
   _generateMap: function(floor) {
     this.creatures = [];
+    if (floor >= 6) {
+      this._finalMap(floor);
+      return;
+    }
     const digger = new ROT.Map.Rogue(this.width, this.height);
     const digCallback = function(x, y, value) {
       if (!this.map[y]) {
@@ -1094,4 +1288,8 @@ const Game = {
       this.map[y][x].terrain = Terrain.Wall;
     }
   },
+};
+
+document.fonts.onloadingdone = function() {
+  Game.init();
 };

@@ -1,18 +1,16 @@
 <!DOCTYPE HTML>
 <html>
   <head>
-    <title>Gwaa</title>
+    <title>The Mage's Student</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/comic-mono@0.0.1/index.css">
     <script src="https://cdn.jsdelivr.net/npm/rot-js@2/dist/rot.js"></script>
     <script src="game.js"></script>
   </head>
-  <body onload="Game.init()">
-    <h1>Gwaa</h1>
+  <body>
+    <h1 style='font-family: "Comic Mono"'>The Mage's Student</h1>
+    <span style='font-family: "Comic Mono"'></span> <!-- idk why but it doesn't load the font correctly without this... -->
     <div id="container"></div>
-    <h3>an early (not-very-polished) prototype of an entry for the 2022 7-Day Roguelike Challenge</h3>
-
-    <p>the idea is a magic-themed deckbuilding game where your mana is represented by a hand of cards with the various types of mana (and you can upgrade your deck by getting cards that give more mana, and get better spells, and so on)</p>
-
-    <p>use <code>WASD</code> or <code>HJKL</code> or arrow keys to move; <code>P</code>/<code>N</code> or <code>[</code>/<code>]</code> to change targets, <code>&gt;</code> to go down stairs, and the number keys to cast spells (healing will heal yourself; attack spells will target whichever enemy is highlighted)</p>
-    <p>casting consecutive spells that use the same mana type will be increasingly less effective</p>
+    <p>Use <code>WASD</code> or <code>HJKL</code> or arrow keys to move; <code>P</code>/<code>N</code> or <code>[</code>/<code>]</code> to change targets, <code>&gt;</code> to go down stairs, and the number keys to cast spells (healing will heal yourself; attack spells will target whichever enemy is highlighted).</p>
+    <p>Casting consecutive spells that use the same mana type will be increasingly less effective.</p>
   </body>
 </html>
