@@ -63,7 +63,7 @@ const Creatures = {
   YellowJelly: {name: "acid jelly", color: Colors.Yellow, symbol: "j", health: 11, damage: 2, level: 3, immune: ["Yellow"], weight: 2},
   Jackal: {name: "jackal", color: "#B72", symbol: "d", health: 11, damage: 3, level: 4, weight: 6},
   Kobold: {name: "kobold", color: "#D83", symbol: "k", health: 22, damage: 3, level: 5, weight: 9},
-  Gecko: {name: "gecko", color: "#6F6", symbol: ":", health: 100, damage: 1, level: 0, weight: 0},
+  Gecko: {name: "gecko", color: "#6F6", symbol: ":", health: 150, damage: 1, level: 0, weight: 0},
   Deceptibat: {name: "deceptibat", color: "#F3E", symbol: "B", health: 4, damage: 1, level: 0, weight: 0},
   Autocat: {name: "autocat", color: "#F66", symbol: "f", health: 4, damage: 1, level: 0, weight: 0},
 };
@@ -74,7 +74,7 @@ const UniqueCreatures = {
     proper_name: true,
     type: Creatures.Gecko,
     action: function(creature) {
-      if (ROT.RNG.getUniform() >= 0.3) {
+      if (ROT.RNG.getUniform() >= 0.4) {
         return false;
       }
       const spaces = [];
@@ -135,7 +135,7 @@ const Items = {
   },
 
   goal: function(name) {
-    return {name: name, type: "goal", color: "#D5E", symbol: "*"};
+    return {name: name, type: "goal", color: "#D5E", symbol: "%"};
   },
 };
 
@@ -567,6 +567,9 @@ const Game = {
   },
 
   _buySpell: function(num) {
+    if (this.player.spellbook.length >= 10) {
+      return false;
+    }
     const item = this.storeSpells[num];
     if (!item || item.cost > this.player.gold) {
       return false;
@@ -925,25 +928,29 @@ const Game = {
     this.display.drawText(2, linenum++, "############### The Mage's Market ################");
     this.display.drawText(2, linenum++, "#%c{white} === Spells (shift + number) ===");
     var color = "";
-    for (i = 0; i < this.storeSpells.length; i++) {
-      const item = this.storeSpells[i];
-      const spell = item.spell;
-      color = "";
-      if (item.cost > this.player.gold) {
-        color = "#666";
+    if (this.player.spellbook.length >= 10) {
+      this.display.drawText(2, linenum++, "#      [spellbook full]");
+    } else {
+      for (i = 0; i < this.storeSpells.length; i++) {
+        const item = this.storeSpells[i];
+        const spell = item.spell;
+        color = "";
+        if (item.cost > this.player.gold) {
+          color = "#666";
+        }
+        var line = `${spell.name} (%c{${spell.type.color}}${spell.type.symbol.repeat(spell.cost)}%c{${color}}`;
+        if (spell.heal) {
+          line += `, ${spell.heal} healing`;
+        }
+        if (spell.damage) {
+          line += `, ${spell.damage} damage`;
+        }
+        if (spell.radius) {
+          line += `, AoE: ${spell.radius}`;
+        }
+        line += ")";
+        this.display.drawText(2, linenum++, `#%c{${color}} S${(i + 1) % 10}: %c{${Colors.Gold}}${("$" + item.cost).padStart(5)}%c{${color}} ${line}`);
       }
-      var line = `${spell.name} (%c{${spell.type.color}}${spell.type.symbol.repeat(spell.cost)}%c{${color}}`;
-      if (spell.heal) {
-        line += `, ${spell.heal} healing`;
-      }
-      if (spell.damage) {
-        line += `, ${spell.damage} damage`;
-      }
-      if (spell.radius) {
-        line += `, AoE: ${spell.radius}`;
-      }
-      line += ")";
-      this.display.drawText(2, linenum++, `#%c{${color}} S${(i + 1) % 10}: %c{${Colors.Gold}}${("$" + item.cost).padStart(5)}%c{${color}} ${line}`);
     }
     this.display.drawText(2, linenum++, "#");
     this.display.drawText(2, linenum++, "#%c{white} === Cards (ctrl + number) ===");
