@@ -164,6 +164,7 @@ const Game = {
   storeSpells: [],
   storeCards: [],
   storeMisc: [],
+  time: 0,
 
   init: function() {
     this.display = new ROT.Display({width: 90, height: 35, fontSize: 15, fontFamily: "Comic Mono", spacing: 1.2});
@@ -192,6 +193,7 @@ const Game = {
 
   _initGame: function() {
     this.start = false;
+    this.time = 0;
     this.player.hp = 10;
     this.player.hp_max = 10;
     this.player.gold = 0;
@@ -338,9 +340,6 @@ const Game = {
           case "goal":
             this.player.goals += 1;
             this._write(`${item.name} acquired.`);
-            if (this.player.goals >= 2) {
-              this._write(`You win! Press R to play again.`);
-            }
             break;
         }
       }
@@ -736,7 +735,20 @@ const Game = {
     return text;
   },
 
+  _wander: function(creature) {
+    const directions = [{x: 0, y: 0}, {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}];
+    const attempts = ROT.RNG.shuffle(directions);
+    for (const dir of attempts) {
+      if (this._passability(creature)(creature.x + dir.x, creature.y + dir.y)) {
+        creature.x += dir.x;
+        creature.y += dir.y;
+        break;
+      }
+    }
+  },
+
   _tick: function() {
+    this.time += 1;
     for (const creature of this.creatures) {
       creature.sees_player = false;
       creature.moved = false;
@@ -770,17 +782,12 @@ const Game = {
             creature.moved = true;
           };
           pathfinder.compute(creature.x, creature.y, pathCallback.bind(this));
-        }
-      } else {
-        const directions = [{x: 0, y: 0}, {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}];
-        const attempts = ROT.RNG.shuffle(directions);
-        for (const dir of attempts) {
-          if (this._passability(creature)(creature.x + dir.x, creature.y + dir.y)) {
-            creature.x += dir.x;
-            creature.y += dir.y;
-            break;
+          if (!creature.moved) {
+            this._wander(creature);
           }
         }
+      } else {
+        this._wander(creature);
       }
     }
     this._updateState();
@@ -916,11 +923,11 @@ const Game = {
     this.display.drawText(14, 10, "Having defeated Geckatron and Hoptimus Prime, you have collected");
     this.display.drawText(21, 11, "both the Newt-Core and the Transformative Cricket.");
 
-    this.display.drawText(31, 13, "Congratulations! You have won.");
+    this.display.drawText(24, 13, `Congratulations! You have won in ${this.time} turns.`);
     this.display.drawText(37, 15, "Thanks for playing!");
 
-    this.display.drawText(28, 28, "Press M to return to the title screen");
-    this.display.drawText(36, 29, "Press R to play again");
+    this.display.drawText(28, 28, "%c{white}Press M to return to the title screen");
+    this.display.drawText(36, 29, "%c{white}Press R to play again");
   },
 
   _drawStore: function() {
@@ -1011,6 +1018,7 @@ const Game = {
     this.display.drawText(2, 33, `HP: ${this.player.hp.toString().padStart(this.player.hp_max.toString().length)} / ${this.player.hp_max}`);
     this.display.drawText(17, 33, `%c{${Colors.Gold}}$${this.player.gold}`);
     this.display.drawText(25, 33, `Depth: ${this.player.floor}`);
+    this.display.drawText(35, 33, `T: ${this.time}`);
 
     this.display.drawText(54, 1, this._getText(), 34);
     for (var i = 10; i < this.display.getOptions().height; i++) {
